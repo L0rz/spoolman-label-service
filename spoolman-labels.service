@@ -1,0 +1,18 @@
+[Unit]
+Description=Spoolman Label Service (Phomemo)
+After=spoolman.service
+Wants=spoolman.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+ExecStart=/home/pi/Spoolman/.venv/bin/uvicorn spoolman-label-service:app --host 0.0.0.0 --port 7913
+Restart=always
+RestartSec=5
+Environment=PHOMEMO_API=http://192.168.130.138:8080
+Environment=LABEL_SIZE=40x30
+Environment=AUTO_PRINT=true
+
+[Install]
+WantedBy=multi-user.target
