@@ -219,15 +219,41 @@ if __name__ == "__main__":
 # ─── Spool Watcher (Auto-Print neue Spulen) ───────────────────────────────────
 
 _known_spool_ids: set[int] = set()
+KNOWN_IDS_FILE = "/home/pi/.spoolman_known_ids.json"
+
+
+def _load_known_ids():
+    """Lädt persistent gespeicherte Spulen-IDs."""
+    import json
+    try:
+        with open(KNOWN_IDS_FILE) as f:
+            ids = json.load(f)
+            _known_spool_ids.update(ids)
+            log.info("Gespeicherte IDs geladen: %d Spulen bekannt", len(_known_spool_ids))
+    except FileNotFoundError:
+        log.info("Keine gespeicherten IDs gefunden — hole von Spoolman")
+
+
+def _save_known_ids():
+    """Speichert bekannte IDs persistent."""
+    import json
+    with open(KNOWN_IDS_FILE, "w") as f:
+        json.dump(list(_known_spool_ids), f)
+
 
 async def _init_known_spools():
-    """Beim Start alle vorhandenen Spulen als bekannt markieren."""
+    """Beim Start: erst Datei laden, dann Spoolman abfragen."""
+    # Zuerst gespeicherte IDs laden (überlebt Neustarts)
+    _load_known_ids()
+
+    # Dann aktuell vorhandene Spulen als bekannt markieren
     try:
         async with httpx.AsyncClient() as client:
             r = await client.get("http://localhost:7912/api/v1/spool?limit=1000")
             spools = r.json()
             for s in spools:
                 _known_spool_ids.add(s["id"])
+        _save_known_ids()
         log.info("Spool-Watcher initialisiert: %d bekannte Spulen", len(_known_spool_ids))
     except Exception as e:
         log.warning("Spool-Watcher Init fehlgeschlagen: %s", e)
@@ -248,6 +274,7 @@ async def _watch_spools():
                 if s["id"] not in _known_spool_ids:
                     _known_spool_ids.add(s["id"])
                     log.info("🆕 Neue Spule erkannt: ID %d — %s", s["id"], s["filament"]["name"])
+                    _save_known_ids()
                     await _do_print(s)
         except Exception as e:
             log.warning("Spool-Watcher Fehler: %s", e)
